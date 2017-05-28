@@ -105,7 +105,7 @@ if (callback) callback(response.statusCode);
 
 }
 
-function batchDownload(options, callback) {
+function BatchDownload(options, callback) {
 
     if (!callback && typeof options === 'function') {
         callback = options;
@@ -122,51 +122,45 @@ function batchDownload(options, callback) {
     if ( 0 == nPattern ) throw("Need a * pattern to start");
     if ( nPattern > 1 ) throw("Only one * pattern is needed");
 
-
-    console.log(nPattern);
-
-    options.retry = options.retry ? options.retry : 10; 
-    // delay before retry
-    options.retryDelay = options.retryDelay ? options.delay : 1000; 
-
+    // pattern start from
     options.from = options.from || 0;
+    // pattern ends to 
     options.to = options.to || 999;
+    // wild card matching size
     options.wildcardSize = options.wildcardSize || 3; 
 
-    var from = options.from;
-    var to = options.to;
-
 		function* gen(){
-				for(let i = from; i < to; ++i){
-						var starRe = /(.*)\*(.*)/i
+				for(let i = options.from; i < options.to; ++i){
+						var repRe = /(.*)\*(.*)/i
             yield {
-                address: options.address.replace(starRe, '$1' + i + '$2'),
+                address: options.address.replace(repRe, '$1' + i + '$2'),
                 index: i
             };
 				}
 		}
 
-    var g = gen();
-
     JobQueue(
             {}, 
             gen(), 
             function(job, done){
-                var file = job.value.address;
-                options.filename = job.value.index; 
-                download(file, options, function(){done();});
+						    var repRe = /(.*)\*(.*)/i
+                options.filename = options.fileName.replace(repRe, '$1' + job.value.index + '$2');
+                download(job.value.address, options, function(){done();});
             }, 
             callback
             );
 
 }
 
+module.exports = BatchDownload; 
+
 var options = {
   
     address: 'http://www.mergentarchives.com/modules/corporateManuals/getManualPageImage.php?year=1975&manualID=4&abbreviation=OTCINDUSTRIAL&manualName=OTC INDUSTRIAL&volume=1&pageNumber=*', 
+    fileName: '*.gif', 
     from: 1,
     to: 100,
     directory: './data'
 }
 
-batchDownload(options, function(){});
+BatchDownload(options, function(){});
