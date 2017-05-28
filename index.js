@@ -10,15 +10,14 @@ function download(file, options, callback) {
     if (!file) throw("Need a file url to download"); 
 
     if (!callback && typeof options === 'function') {
-        callback = options;
-    }
+        callback = options; }
 
     // options parameter
     options = typeof options === 'object' ? options : {};
     // request timeout
-    options.timeout = options.timeout || 20000; // file save directory
+    options.timeout = options.timeout || 200000; // file save directory
     // file directory
-    options.directory = options.directory ? options.directory : '.';
+    options.directory = options.directory ? options.directory : './download';
     // retry times before failed
     options.retry = options.retry ? options.retry : 10; 
     // delay before retry
@@ -43,7 +42,8 @@ function download(file, options, callback) {
 
     var fetchRetry = function(n){
 
-        console.log("Fetching ... ", file);
+        if(options.log)
+          console.log("Fetching ... ", file);
 
         var request = req.get(file, function(response) {
 
@@ -53,19 +53,39 @@ function download(file, options, callback) {
                     if (err) throw err;
                     var file = fs.createWriteStream(path);
                     response.pipe(file);
-                })
+                });
             } else {
-if (callback) callback(response.statusCode);
 
+                if (callback) callback(response.statusCode);
             }
 
             response.on("end", function(){
+
                 if (callback) callback(false, path);
-            })
+            });
 
-            request.setTimeout(options.timeout, function () {
+        }).on('error', function(e) {
 
-                request.abort();
+            request.abort();
+
+            console.error("Error: Connection error on request " + file);
+            console.error("Retry: Retry on request " + file);
+            console.error("Retry: Retry left " + n);
+
+            if(n > 0){
+                setTimeout(function(){
+                    fetchRetry(--n);
+                }, options.retryDelay);
+            }else{
+                if(callback) callback(e);
+            }
+
+        });
+        /*
+        .setTimeout(options.timeout)
+        .on('timeout', function(){
+
+                //request.abort();
 
                 console.error("Error: timeout on request " + file);
                 console.error("Retry: Retry on request " + file);
@@ -79,25 +99,12 @@ if (callback) callback(response.statusCode);
                     if(callback) callback("Timeout");
                 }
 
-            })
+        });
+         * */
 
-        }).on('error', function(e) {
+        // note: request.abort() will generate 'error' event
+        // 
 
-            request.abort();
-
-            console.error("Error: connecton error on request " + file);
-            console.error("Error: Retry on request " + file);
-            console.error("Error: Retry left " + n);
-
-            if(n > 0){
-                setTimeout(function(){
-                    fetchRetry(--n);
-                }, options.retryDelay);
-            }else{
-                if (callback) callback(e);
-            }
-
-        })
 
     }
 
@@ -116,8 +123,7 @@ function BatchDownload(options, callback) {
 
     if (!options.address) throw("Need options.address to download");
 
-    var starRe = /\*/gi; 
-    var nPattern = options.address.match(starRe).length;
+    var nPattern = options.address.match(/\*/gi).length;
 
     if ( 0 == nPattern ) throw("Need a * pattern to start");
     if ( nPattern > 1 ) throw("Only one * pattern is needed");
@@ -143,8 +149,7 @@ function BatchDownload(options, callback) {
             {}, 
             gen(), 
             function(job, done){
-						    var repRe = /(.*)\*(.*)/i
-                options.filename = options.fileName.replace(repRe, '$1' + job.value.index + '$2');
+                options.filename = options.fileName.replace(/(.*)\*(.*)/i, '$1' + job.value.index + '$2');
                 download(job.value.address, options, function(){done();});
             }, 
             callback
@@ -153,14 +158,3 @@ function BatchDownload(options, callback) {
 }
 
 module.exports = BatchDownload; 
-
-var options = {
-  
-    address: 'http://www.mergentarchives.com/modules/corporateManuals/getManualPageImage.php?year=1975&manualID=4&abbreviation=OTCINDUSTRIAL&manualName=OTC INDUSTRIAL&volume=1&pageNumber=*', 
-    fileName: '*.gif', 
-    from: 1,
-    to: 100,
-    directory: './data'
-}
-
-BatchDownload(options, function(){});
